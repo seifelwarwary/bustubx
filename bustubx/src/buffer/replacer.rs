@@ -6,9 +6,9 @@ use super::buffer_pool::FrameId;
 #[derive(Debug)]
 struct LRUKNode {
     k: usize,
-    // 该frame最近k次被访问的时间
+    // The timestamps of the most recent k accesses for this frame
     history: LinkedList<u64>,
-    // 是否可被置换
+    // Whether this frame can be evicted
     is_evictable: bool,
 }
 impl LRUKNode {
@@ -29,13 +29,13 @@ impl LRUKNode {
 
 #[derive(Debug)]
 pub struct LRUKReplacer {
-    // 当前可置换的frame数
+    // Current number of evictable frames
     current_size: usize,
-    // 可置换的frame数上限
+    // Maximum number of evictable frames
     replacer_size: usize,
     k: usize,
     node_store: HashMap<FrameId, LRUKNode>,
-    // 当前时间戳（从0递增）
+    // Current timestamp (incrementing from 0)
     current_timestamp: u64,
 }
 impl LRUKReplacer {
@@ -49,7 +49,7 @@ impl LRUKReplacer {
         }
     }
 
-    // 驱逐 evictable 且具有最大 k-distance 的 frame
+    // Evict the evictable frame with the maximum k-distance
     pub fn evict(&mut self) -> Option<FrameId> {
         let mut max_k_distance = 0;
         let mut result = None;
@@ -73,13 +73,13 @@ impl LRUKReplacer {
         result
     }
 
-    // 记录frame的访问
+    // Record frame access
     pub fn record_access(&mut self, frame_id: FrameId) -> BustubxResult<()> {
         if let Some(node) = self.node_store.get_mut(&frame_id) {
             node.record_access(self.current_timestamp);
             self.current_timestamp += 1;
         } else {
-            // 创建新node
+            // Create new node
             if self.node_store.len() >= self.replacer_size {
                 return Err(BustubxError::Internal(
                     "frame size exceeds the limit".to_string(),
@@ -93,7 +93,7 @@ impl LRUKReplacer {
         Ok(())
     }
 
-    // 设置frame是否可被置换
+    // Set whether a frame is evictable
     pub fn set_evictable(&mut self, frame_id: FrameId, set_evictable: bool) -> BustubxResult<()> {
         if let Some(node) = self.node_store.get_mut(&frame_id) {
             let evictable = node.is_evictable;
@@ -109,7 +109,7 @@ impl LRUKReplacer {
         }
     }
 
-    // 移除frame
+    // Remove frame
     pub fn remove(&mut self, frame_id: FrameId) {
         if let Some(node) = self.node_store.get(&frame_id) {
             assert!(node.is_evictable, "frame is not evictable");
@@ -118,7 +118,7 @@ impl LRUKReplacer {
         }
     }
 
-    // 获取当前可置换的frame数
+    // Get the current number of evictable frames
     pub fn size(&self) -> usize {
         self.current_size
     }

@@ -23,12 +23,12 @@ pub const BUFFER_POOL_SIZE: usize = 1000;
 #[derive(Debug)]
 pub struct BufferPoolManager {
     pool: Vec<Arc<RwLock<Page>>>,
-    // LRU-K置换算法
+    // LRU-K replacement algorithm
     pub replacer: Arc<RwLock<LRUKReplacer>>,
     pub disk_manager: Arc<DiskManager>,
-    // 缓冲池中的页号与frame号的映射
+    // Mapping between page IDs and frame IDs in the buffer pool
     page_table: Arc<DashMap<PageId, FrameId>>,
-    // 缓冲池中空闲的frame
+    // Free frames in the buffer pool
     free_list: Arc<RwLock<VecDeque<FrameId>>>,
 }
 impl BufferPoolManager {
@@ -49,19 +49,19 @@ impl BufferPoolManager {
         }
     }
 
-    // 从缓冲池创建一个新页
+    // Create a new page in the buffer pool
     pub fn new_page(&self) -> BustubxResult<PageRef> {
-        // 缓冲池已满且无可替换的页
+        // Buffer pool is full and no page can be replaced
         if self.free_list.read().unwrap().is_empty() && self.replacer.read().unwrap().size() == 0 {
             return Err(BustubxError::Storage(
                 "Cannot new page because buffer pool is full and no page to evict".to_string(),
             ));
         }
 
-        // 分配一个frame
+        // Allocate a frame
         let frame_id = self.allocate_frame()?;
 
-        // 从磁盘分配一个页
+        // Allocate a page from disk
         let new_page_id = self.disk_manager.allocate_page().unwrap();
         self.page_table.insert(new_page_id, frame_id);
         let new_page = Page::new(new_page_id).with_pin_count(1u32);
@@ -94,10 +94,10 @@ impl BufferPoolManager {
                 replacer: self.replacer.clone(),
             })
         } else {
-            // 分配一个frame
+            // Allocate a frame
             let frame_id = self.allocate_frame()?;
 
-            // 从磁盘读取页
+            // Read page from disk
             self.page_table.insert(page_id, frame_id);
             let new_page = Page::new(page_id)
                 .with_pin_count(1u32)
@@ -161,7 +161,7 @@ impl BufferPoolManager {
         Ok((page, tree_leaf_page))
     }
 
-    // 将缓冲池中指定页写回磁盘
+    // Write the specified page in the buffer pool back to disk
     pub fn flush_page(&self, page_id: PageId) -> BustubxResult<bool> {
         if let Some(frame_id) = self.page_table.get(&page_id) {
             let page = self.pool[*frame_id].clone();
@@ -174,7 +174,7 @@ impl BufferPoolManager {
         }
     }
 
-    // 将缓冲池中的所有页写回磁盘
+    // Write all pages in the buffer pool back to disk
     pub fn flush_all_pages(&self) -> BustubxResult<()> {
         let page_ids: Vec<PageId> = self.page_table.iter().map(|e| *e.key()).collect();
         for page_id in page_ids {
@@ -183,7 +183,7 @@ impl BufferPoolManager {
         Ok(())
     }
 
-    // 删除缓冲池中的页
+    // Delete a page from the buffer pool
     pub fn delete_page(&self, page_id: PageId) -> BustubxResult<bool> {
         if let Some(frame_id_lock) = self.page_table.get(&page_id) {
             let frame_id = *frame_id_lock;
@@ -191,17 +191,17 @@ impl BufferPoolManager {
 
             let page = self.pool[frame_id].clone();
             if page.read().unwrap().pin_count > 0 {
-                // 页被固定，无法删除
+                // Page is pinned, cannot delete
                 return Ok(false);
             }
 
-            // 从缓冲池中删除
+            // Remove from buffer pool
             page.write().unwrap().destroy();
             self.page_table.remove(&page_id);
             self.free_list.write().unwrap().push_back(frame_id);
             self.replacer.write().unwrap().remove(frame_id);
 
-            // 从磁盘上删除
+            // Delete from disk
             self.disk_manager.deallocate_page(page_id)?;
             Ok(true)
         } else {

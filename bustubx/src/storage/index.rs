@@ -33,7 +33,7 @@ impl Context {
     }
 }
 
-// B+树索引
+// B+ tree index
 #[derive(Debug)]
 pub struct BPlusTreeIndex {
     pub key_schema: SchemaRef,
@@ -69,7 +69,7 @@ impl BPlusTreeIndex {
             return Ok(());
         }
         let mut context = Context::new(self.root_page_id.load(Ordering::SeqCst));
-        // 找到leaf page
+        // Find leaf page
         let Some(leaf_page) = self.find_leaf_page(key, &mut context)? else {
             return Err(BustubxError::Storage(
                 "Cannot find leaf page to insert".to_string(),
@@ -85,9 +85,9 @@ impl BPlusTreeIndex {
         let mut curr_page = leaf_page;
         let mut curr_tree_page = BPlusTreePage::Leaf(leaf_tree_page);
 
-        // leaf page已满则分裂
+        // If leaf page is full, split it
         while curr_tree_page.is_full() {
-            // 向右分裂出一个新page
+            // Split to the right to create a new page
             let internalkv = self.split(&mut curr_tree_page)?;
 
             curr_page
@@ -99,7 +99,7 @@ impl BPlusTreeIndex {
 
             let curr_page_id = curr_page.read().unwrap().page_id;
             if let Some(parent_page_id) = context.read_set.pop_back() {
-                // 更新父节点
+                // Update parent node
                 let (parent_page, mut parent_tree_page) = self
                     .buffer_pool
                     .fetch_tree_page(parent_page_id, self.key_schema.clone())?;
@@ -108,13 +108,13 @@ impl BPlusTreeIndex {
                 curr_page = parent_page;
                 curr_tree_page = parent_tree_page;
             } else if curr_page_id == self.root_page_id.load(Ordering::SeqCst) {
-                // new 一个新的root page
+                // Create a new root page
                 let new_root_page = self.buffer_pool.new_page()?;
                 let new_root_page_id = new_root_page.read().unwrap().page_id;
                 let mut new_root_internal_page =
                     BPlusTreeInternalPage::new(self.key_schema.clone(), self.internal_max_size);
 
-                // internal page第一个kv对的key为空
+                // The first kv pair's key in internal page is empty
                 new_root_internal_page.insert(
                     Tuple::empty(self.key_schema.clone()),
                     self.root_page_id.load(Ordering::SeqCst),
@@ -125,7 +125,7 @@ impl BPlusTreeIndex {
                     &BPlusTreeInternalPageCodec::encode(&new_root_internal_page),
                 ));
 
-                // 更新root page id
+                // Update root page id
                 self.root_page_id.store(new_root_page_id, Ordering::SeqCst);
 
                 curr_page = new_root_page;
@@ -148,7 +148,7 @@ impl BPlusTreeIndex {
             return Ok(());
         }
         let mut context = Context::new(self.root_page_id.load(Ordering::SeqCst));
-        // 找到leaf page
+        // Find leaf page
         let Some(leaf_page) = self.find_leaf_page(key, &mut context)? else {
             return Err(BustubxError::Storage(
                 "Cannot find leaf page to delete".to_string(),
@@ -169,7 +169,7 @@ impl BPlusTreeIndex {
         let mut curr_tree_page = BPlusTreePage::Leaf(leaf_tree_page);
         let mut curr_page_id = leaf_page.read().unwrap().page_id;
 
-        // leaf page未达到半满则从兄弟节点借一个或合并
+        // If leaf page is not half full, borrow from sibling nodes or merge
         while curr_tree_page.is_underflow(self.root_page_id.load(Ordering::SeqCst) == curr_page_id)
         {
             let Some(parent_page_id) = context.read_set.pop_back() else {
@@ -178,14 +178,14 @@ impl BPlusTreeIndex {
             let (left_sibling_page_id, right_sibling_page_id) =
                 self.find_sibling_pages(parent_page_id, curr_page_id)?;
 
-            // 尝试从左兄弟借一个
+            // Try to borrow one from left sibling
             if let Some(left_sibling_page_id) = left_sibling_page_id {
                 if self.borrow_max_kv(parent_page_id, curr_page_id, left_sibling_page_id)? {
                     break;
                 }
             }
 
-            // 尝试从右兄弟借一个
+            // Try to borrow one from right sibling
             if let Some(right_sibling_page_id) = right_sibling_page_id {
                 if self.borrow_min_kv(parent_page_id, curr_page_id, right_sibling_page_id)? {
                     break;
@@ -193,10 +193,10 @@ impl BPlusTreeIndex {
             }
 
             let new_parent_page_id = if let Some(left_sibling_page_id) = left_sibling_page_id {
-                // 跟左兄弟合并
+                // Merge with left sibling
                 self.merge(parent_page_id, left_sibling_page_id, curr_page_id)?
             } else if let Some(right_sibling_page_id) = right_sibling_page_id {
-                // 跟右兄弟合并
+                // Merge with right sibling
                 self.merge(parent_page_id, curr_page_id, right_sibling_page_id)?
             } else {
                 return Err(BustubxError::Storage(
@@ -228,19 +228,19 @@ impl BPlusTreeIndex {
                 &leaf_page,
             )));
 
-        // 更新root page id
+        // Update root page id
         self.root_page_id.store(new_page_id, Ordering::SeqCst);
 
         Ok(())
     }
 
-    // 找到叶子节点上对应的Value
+    // Find the value corresponding to the key on the leaf node
     pub fn get(&self, key: &Tuple) -> BustubxResult<Option<RecordId>> {
         if self.is_empty() {
             return Ok(None);
         }
 
-        // 找到leaf page
+        // Find leaf page
         let mut context = Context::new(self.root_page_id.load(Ordering::SeqCst));
         let Some(leaf_page) = self.find_leaf_page(key, &mut context)? else {
             return Ok(None);
@@ -262,14 +262,14 @@ impl BPlusTreeIndex {
             self.key_schema.clone(),
         )?;
 
-        // 找到leaf page
+        // Find leaf page
         loop {
             match curr_tree_page {
                 BPlusTreePage::Internal(internal_page) => {
                     context
                         .read_set
                         .push_back(curr_page.read().unwrap().page_id);
-                    // 查找下一页
+                    // Find next page
                     let next_page_id = internal_page.look_up(key);
                     let (next_page, next_tree_page) = self
                         .buffer_pool
@@ -284,20 +284,20 @@ impl BPlusTreeIndex {
         }
     }
 
-    // 分裂page
+    // Split page
     fn split(&self, tree_page: &mut BPlusTreePage) -> BustubxResult<InternalKV> {
         let new_page = self.buffer_pool.new_page()?;
         let new_page_id = new_page.read().unwrap().page_id;
 
         match tree_page {
             BPlusTreePage::Leaf(leaf_page) => {
-                // 拆分kv对
+                // Split kv pairs
                 let mut new_leaf_page =
                     BPlusTreeLeafPage::new(self.key_schema.clone(), self.leaf_max_size);
                 new_leaf_page
                     .batch_insert(leaf_page.split_off(leaf_page.header.current_size as usize / 2));
 
-                // 更新next page id
+                // Update next page id
                 new_leaf_page.header.next_page_id = leaf_page.header.next_page_id;
                 leaf_page.header.next_page_id = new_page.read().unwrap().page_id;
 
@@ -308,7 +308,7 @@ impl BPlusTreeIndex {
                 Ok((new_leaf_page.key_at(0).clone(), new_page_id))
             }
             BPlusTreePage::Internal(internal_page) => {
-                // 拆分kv对
+                // Split kv pairs
                 let mut new_internal_page =
                     BPlusTreeInternalPage::new(self.key_schema.clone(), self.internal_max_size);
                 new_internal_page.batch_insert(
@@ -420,7 +420,7 @@ impl BPlusTreeIndex {
                 &borrowed_tree_page,
             )));
 
-        // 更新父节点
+        // Update parent node
         let (parent_page, mut parent_internal_page) = self
             .buffer_pool
             .fetch_tree_internal_page(parent_page_id, self.key_schema.clone())?;
@@ -456,11 +456,11 @@ impl BPlusTreeIndex {
             .buffer_pool
             .fetch_tree_page(right_page_id, self.key_schema.clone())?;
 
-        // 向左合入
+        // Merge to the left
         match left_tree_page {
             BPlusTreePage::Internal(ref mut left_internal_page) => {
                 if let BPlusTreePage::Internal(ref mut right_internal_page) = right_tree_page {
-                    // 空key处理
+                    // Handle empty key
                     let mut kvs = right_internal_page.array.clone();
                     let min_leaf_kv =
                         self.find_subtree_min_leafkv(right_internal_page.value_at(0))?;
@@ -475,7 +475,7 @@ impl BPlusTreeIndex {
             BPlusTreePage::Leaf(ref mut left_leaf_page) => {
                 if let BPlusTreePage::Leaf(ref mut right_leaf_page) = right_tree_page {
                     left_leaf_page.batch_insert(right_leaf_page.array.clone());
-                    // 更新next page id
+                    // Update next page id
                     left_leaf_page.header.next_page_id = right_leaf_page.header.next_page_id;
                 } else {
                     return Err(BustubxError::Storage(
@@ -492,21 +492,21 @@ impl BPlusTreeIndex {
                 &left_tree_page,
             )));
 
-        // 删除右边页
+        // Delete right page
         self.buffer_pool.delete_page(right_page_id)?;
 
-        // 更新父节点
+        // Update parent node
         let (parent_page, mut parent_internal_page) = self
             .buffer_pool
             .fetch_tree_internal_page(parent_page_id, self.key_schema.clone())?;
         parent_internal_page.delete_page_id(right_page_id);
 
-        // 根节点只有一个子节点（叶子）时，则叶子节点成为新的根节点
+        // When root node has only one child (leaf), the leaf node becomes the new root
         if parent_page_id == self.root_page_id.load(Ordering::SeqCst)
             && parent_internal_page.header.current_size == 1
         {
             self.root_page_id.store(left_page_id, Ordering::SeqCst);
-            // 删除旧的根节点
+            // Delete old root node
             self.buffer_pool.delete_page(parent_page_id)?;
             Ok(left_page_id)
         } else {
@@ -517,12 +517,12 @@ impl BPlusTreeIndex {
         }
     }
 
-    // 查找子树最小的leafKV
+    // Find the minimum leafKV of the subtree
     fn find_subtree_min_leafkv(&self, page_id: PageId) -> BustubxResult<LeafKV> {
         self.find_subtree_leafkv(page_id, true)
     }
 
-    // 查找子树最大的leafKV
+    // Find the maximum leafKV of the subtree
     fn find_subtree_max_leafkv(&self, page_id: PageId) -> BustubxResult<LeafKV> {
         self.find_subtree_leafkv(page_id, false)
     }

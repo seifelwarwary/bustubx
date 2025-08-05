@@ -157,7 +157,7 @@ impl TableHeap {
             .buffer_pool
             .fetch_table_page(first_page_id, self.schema.clone())?;
         if table_page.header.num_tuples == 0 {
-            // TODO 忽略删除的tuple
+            // TODO: ignore deleted tuples
             Ok(None)
         } else {
             Ok(Some(RecordId::new(first_page_id, 0)))
@@ -180,7 +180,7 @@ impl TableHeap {
             .buffer_pool
             .fetch_table_page(table_page.header.next_page_id, self.schema.clone())?;
         if next_table_page.header.num_tuples == 0 {
-            // TODO 忽略删除的tuple
+            // TODO: ignore deleted tuples
             Ok(None)
         } else {
             Ok(Some(RecordId::new(table_page.header.next_page_id, 0)))

@@ -17,9 +17,9 @@ pub const BUSTUBX_PAGE_SIZE: usize = 4096;
 pub struct Page {
     pub page_id: PageId,
     data: [u8; BUSTUBX_PAGE_SIZE],
-    // 被引用次数
+    // Reference count
     pub pin_count: u32,
-    // 是否被写过
+    // Whether it has been written to
     pub is_dirty: bool,
 }
 

@@ -67,7 +67,7 @@ pub type LeafKV = (Tuple, RecordId);
 pub struct BPlusTreeInternalPage {
     pub schema: SchemaRef,
     pub header: BPlusTreeInternalPageHeader,
-    // 第一个key为空，n个key对应n+1个value
+    // The first key is empty, n keys correspond to n+1 values
     pub array: Vec<InternalKV>,
 }
 
@@ -123,11 +123,11 @@ impl BPlusTreeInternalPage {
         (None, None)
     }
 
-    // TODO 可以通过二分查找来插入
+    // TODO: can be inserted using binary search
     pub fn insert(&mut self, key: Tuple, page_id: PageId) {
         self.array.push((key, page_id));
         self.header.current_size += 1;
-        // 跳过第一个空key
+        // Skip the first empty key
         let null_kv = self.array.remove(0);
         self.array.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
         self.array.insert(0, null_kv);
@@ -143,7 +143,7 @@ impl BPlusTreeInternalPage {
         if self.header.current_size == 0 {
             return;
         }
-        // 第一个key为空，所以从1开始
+        // The first key is empty, so start from 1
         let mut start: i32 = 1;
         let mut end: i32 = self.header.current_size as i32 - 1;
         while start < end {
@@ -152,7 +152,7 @@ impl BPlusTreeInternalPage {
             if compare_res == std::cmp::Ordering::Equal {
                 self.array.remove(mid as usize);
                 self.header.current_size -= 1;
-                // 删除后，如果只剩下一个空key，那么删除
+                // After deletion, if only one empty key remains, delete it
                 if self.header.current_size == 1 {
                     self.array.remove(0);
                     self.header.current_size -= 1;
@@ -167,7 +167,7 @@ impl BPlusTreeInternalPage {
         if key.partial_cmp(&self.array[start as usize].0).unwrap() == std::cmp::Ordering::Equal {
             self.array.remove(start as usize);
             self.header.current_size -= 1;
-            // 删除后，如果只剩下一个空key，那么删除
+            // After deletion, if only one empty key remains, delete it
             if self.header.current_size == 1 {
                 self.array.remove(0);
                 self.header.current_size -= 1;
@@ -215,7 +215,7 @@ impl BPlusTreeInternalPage {
         if self.header.current_size == 0 {
             return None;
         }
-        // 第一个key为空，所以从1开始
+        // The first key is empty, so start from 1
         let mut start: i32 = 1;
         let mut end: i32 = self.header.current_size as i32 - 1;
         while start < end {
@@ -235,9 +235,9 @@ impl BPlusTreeInternalPage {
         None
     }
 
-    // 查找key对应的page_id
+    // Find the page_id corresponding to the key
     pub fn look_up(&self, key: &Tuple) -> PageId {
-        // 第一个key为空，所以从1开始
+        // The first key is empty, so start from 1
         let mut start = 1;
         if self.header.current_size == 0 {
             println!("look_up empty page");
@@ -333,7 +333,7 @@ impl BPlusTreeLeafPage {
         self.header.current_size > self.header.max_size
     }
 
-    // TODO 可以通过二分查找来插入
+    // TODO: can be inserted using binary search
     pub fn insert(&mut self, key: Tuple, rid: RecordId) {
         self.array.push((key, rid));
         self.header.current_size += 1;
@@ -370,7 +370,7 @@ impl BPlusTreeLeafPage {
         }
     }
 
-    // 查找key对应的rid
+    // Find the rid corresponding to the key
     pub fn look_up(&self, key: &Tuple) -> Option<RecordId> {
         let key_index = self.key_index(key);
         key_index.map(|index| self.array[index].1)

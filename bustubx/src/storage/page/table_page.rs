@@ -38,7 +38,7 @@ pub static EMPTY_TUPLE_INFO: LazyLock<TupleInfo> = LazyLock::new(|| TupleInfo {
 pub struct TablePage {
     pub schema: SchemaRef,
     pub header: TablePageHeader,
-    // 整个页原始数据
+    // Raw data of the entire page
     pub data: [u8; BUSTUBX_PAGE_SIZE],
 }
 
@@ -234,7 +234,7 @@ impl TablePage {
     }
 
     pub fn get_next_rid(&self, rid: &RecordId) -> Option<RecordId> {
-        // TODO 忽略删除的tuple
+        // TODO: ignore deleted tuples
         let tuple_id = rid.slot_num;
         if tuple_id + 1 >= self.header.num_tuples as u32 {
             return None;
